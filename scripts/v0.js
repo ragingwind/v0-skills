@@ -14,7 +14,7 @@ function getApiKey() {
  * Create component - Generate new components on v0 platform
  * @param {string} chatId - Chat identifier
  * @param {string} prompt - Component description
- * @param {object} options - { enhancePrompt?: boolean, createComponent?: boolean }
+ * @param {object} options - { createComponent?: boolean }
  * @returns {Promise<{ text: string, demo: string, files: Array<{ lang, file, source }> }>}
  */
 async function createComponent(chatId, prompt, options = {}) {
@@ -26,7 +26,6 @@ async function createComponent(chatId, prompt, options = {}) {
     },
     body: JSON.stringify({
       prompt,
-      enhancePrompt: options.enhancePrompt,
       createComponent: options.createComponent
     })
   })
