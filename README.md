@@ -1,5 +1,7 @@
 # v0-skills
 
+> EXPERIMENTAL STAGE, use at your own risk.
+
 A Claude Code skill for [v0](https://v0.dev) development with React, TypeScript, and modern web best practices.
 
 ## What Does the LLM Do?
@@ -50,6 +52,7 @@ npx skills install ragingwind/v0-skills
 ```
 
 Local development:
+
 ```bash
 npx skills link
 ```
