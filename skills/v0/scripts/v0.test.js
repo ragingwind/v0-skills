@@ -10,11 +10,10 @@
  *   node scripts/v0.test.js --cleanup    - Cleanup test chats
  */
 
-const { createComponent, getChatList, getFileList, getFileContent, getFilesByPath } = require('./v0.js')
+const { getChatList, getFileList, getFileContent, getFilesByPath } = require('./v0.js')
 
 // Test configuration
 const TEST_CHAT_PREFIX = 'test-v0-api-'
-const TEST_COMPONENT_PROMPT = 'Simple button component with hover effect. React, Tailwind.'
 
 // ANSI colors for output
 const colors = {
@@ -52,10 +51,6 @@ async function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-function generateTestChatId() {
-  return `${TEST_CHAT_PREFIX}${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-}
-
 // Test Suite
 const tests = {
   async testGetChatList() {
@@ -75,39 +70,6 @@ const tests = {
       }
 
       return { success: true, data: result }
-    } catch (error) {
-      logError(`Failed: ${error.message}`)
-      return { success: false, error }
-    }
-  },
-
-  async testCreateComponent() {
-    logTest('Test: create_component')
-
-    logInfo(`Creating new chat...`)
-
-    try {
-      const result = await createComponent(null, TEST_COMPONENT_PROMPT)
-
-      if (!result.text || !result.files || !Array.isArray(result.files)) {
-        throw new Error('Invalid response structure')
-      }
-
-      const chatId = result.id
-      logSuccess(`Component created with ${result.files.length} file(s)`)
-      logInfo(`Chat ID: ${chatId}`)
-      logInfo(`Description: ${result.text.substring(0, 50)}...`)
-
-      if (result.demo) {
-        logInfo(`Demo URL: ${result.demo}`)
-      }
-
-      result.files.forEach(file => {
-        const fileName = file.meta?.file || file.name
-        logInfo(`  - ${fileName} (${file.lang})`)
-      })
-
-      return { success: true, data: result, chatId }
     } catch (error) {
       logError(`Failed: ${error.message}`)
       return { success: false, error }
@@ -247,36 +209,6 @@ const tests = {
     }
   },
 
-  async testIterativeRefinement(chatId) {
-    logTest('Test: Iterative refinement')
-
-    if (!chatId) {
-      logError('No chatId provided (skipped)')
-      return { success: false, skipped: true }
-    }
-
-    try {
-      logInfo('Adding refinement to existing component...')
-
-      const result = await createComponent(
-        chatId,
-        'Add a disabled state and loading spinner to the button'
-      )
-
-      if (!result.text || !result.files) {
-        throw new Error('Invalid response structure')
-      }
-
-      logSuccess(`Refinement applied: ${result.files.length} file(s) updated`)
-      logInfo(`Description: ${result.text.substring(0, 50)}...`)
-
-      return { success: true, data: result }
-    } catch (error) {
-      logError(`Failed: ${error.message}`)
-      return { success: false, error }
-    }
-  },
-
   async cleanupTestChats() {
     logTest('Cleanup: Remove test chats')
 
@@ -333,73 +265,58 @@ async function runTests(options = {}) {
     // Test 1: Get chat list
     results.total++
     const chatListResult = await tests.testGetChatList()
-    if (chatListResult.success) results.passed++
+    if (chatListResult.success) {
+      results.passed++
+      // Use first chat from list for subsequent tests
+      if (chatListResult.data?.data?.length > 0) {
+        testChatId = chatListResult.data.data[0].id
+      }
+    } else {
+      results.failed++
+    }
+
+    await sleep(500)
+
+    // Test 2: Get file list
+    results.total++
+    const fileListResult = await tests.testGetFileList(testChatId)
+    if (fileListResult.success) {
+      results.passed++
+      if (fileListResult.data?.files?.length > 0) {
+        testFileName = fileListResult.data.files[0].name
+      }
+    } else if (fileListResult.skipped) {
+      results.skipped++
+    } else {
+      results.failed++
+    }
+
+    await sleep(500)
+
+    // Test 3: Get file content (all)
+    results.total++
+    const fileContentResult = await tests.testGetFileContent(testChatId)
+    if (fileContentResult.success) results.passed++
+    else if (fileContentResult.skipped) results.skipped++
     else results.failed++
 
     await sleep(500)
 
-    if (options.quick) {
-      log(`\n${colors.yellow}Quick mode: Skipping component creation tests${colors.reset}`)
-    } else {
-      // Test 2: Create component
-      results.total++
-      const createResult = await tests.testCreateComponent()
-      if (createResult.success) {
-        results.passed++
-        testChatId = createResult.chatId
-        if (createResult.data.files.length > 0) {
-          const file = createResult.data.files[0]
-          testFileName = file.meta?.file || file.name
-        }
-      } else {
-        results.failed++
-      }
+    // Test 4: Get file content (specific)
+    results.total++
+    const fileContentSpecificResult = await tests.testGetFileContentSpecific(testChatId, testFileName)
+    if (fileContentSpecificResult.success) results.passed++
+    else if (fileContentSpecificResult.skipped) results.skipped++
+    else results.failed++
 
-      await sleep(1000)
+    await sleep(500)
 
-      // Test 3: Get file list
-      results.total++
-      const fileListResult = await tests.testGetFileList(testChatId)
-      if (fileListResult.success) results.passed++
-      else if (fileListResult.skipped) results.skipped++
-      else results.failed++
-
-      await sleep(500)
-
-      // Test 4: Get file content (all)
-      results.total++
-      const fileContentResult = await tests.testGetFileContent(testChatId)
-      if (fileContentResult.success) results.passed++
-      else if (fileContentResult.skipped) results.skipped++
-      else results.failed++
-
-      await sleep(500)
-
-      // Test 5: Get file content (specific)
-      results.total++
-      const fileContentSpecificResult = await tests.testGetFileContentSpecific(testChatId, testFileName)
-      if (fileContentSpecificResult.success) results.passed++
-      else if (fileContentSpecificResult.skipped) results.skipped++
-      else results.failed++
-
-      await sleep(500)
-
-      // Test 6: Get files by path
-      results.total++
-      const filesByPathResult = await tests.testGetFilesByPath(testChatId)
-      if (filesByPathResult.success) results.passed++
-      else if (filesByPathResult.skipped) results.skipped++
-      else results.failed++
-
-      await sleep(500)
-
-      // Test 7: Iterative refinement
-      results.total++
-      const refinementResult = await tests.testIterativeRefinement(testChatId)
-      if (refinementResult.success) results.passed++
-      else if (refinementResult.skipped) results.skipped++
-      else results.failed++
-    }
+    // Test 5: Get files by path
+    results.total++
+    const filesByPathResult = await tests.testGetFilesByPath(testChatId)
+    if (filesByPathResult.success) results.passed++
+    else if (filesByPathResult.skipped) results.skipped++
+    else results.failed++
 
     // Cleanup if requested
     if (options.cleanup) {
@@ -423,8 +340,7 @@ async function runTests(options = {}) {
   log(`Skipped: ${results.skipped}`, colors.yellow)
 
   if (testChatId) {
-    log(`\n${colors.dim}Test chat created: ${testChatId}${colors.reset}`)
-    log(`${colors.dim}View at: https://v0.dev/chat/${testChatId}${colors.reset}`)
+    log(`\n${colors.dim}Tested with chat: ${testChatId}${colors.reset}`)
   }
 
   const exitCode = results.failed > 0 ? 1 : 0
@@ -434,7 +350,6 @@ async function runTests(options = {}) {
 // CLI handler
 const args = process.argv.slice(2)
 const options = {
-  quick: args.includes('--quick'),
   cleanup: args.includes('--cleanup')
 }
 
@@ -443,7 +358,6 @@ if (args.includes('--help') || args.includes('-h')) {
   console.log('')
   console.log('Usage:')
   console.log('  node scripts/v0.test.js              Run all tests')
-  console.log('  node scripts/v0.test.js --quick      Quick test (skip creation)')
   console.log('  node scripts/v0.test.js --cleanup    Cleanup test chats')
   console.log('  node scripts/v0.test.js --help       Show this help')
   console.log('')

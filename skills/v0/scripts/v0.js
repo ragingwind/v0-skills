@@ -11,33 +11,6 @@ function getApiKey() {
 }
 
 /**
- * Create component - Generate new components on v0 platform
- * @param {string} chatId - Chat identifier (optional for new chats)
- * @param {string} message - Component description
- * @returns {Promise<{ id: string, text: string, demo: string, files: Array<{ lang, meta: { file }, source }> }>}
- */
-async function createComponent(chatId, message) {
-  const url = chatId
-    ? `${BASE_URL}/chats/${chatId}/messages`
-    : `${BASE_URL}/chats`
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${getApiKey()}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ message })
-  })
-
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status}`)
-  }
-
-  return response.json()
-}
-
-/**
  * Get chat list - Retrieve v0 chats with pagination
  * @param {object} options - { limit?: string, offset?: string }
  * @returns {Promise<{ chats: Array<{ chatId, chatName }> }>}
@@ -161,15 +134,6 @@ const [,, command, ...args] = process.argv
 async function main() {
   try {
     switch (command) {
-      case 'create_component': {
-        const [chatIdOrMessage, ...messageParts] = args
-        const hasMessage = messageParts.length > 0
-        const chatId = hasMessage ? chatIdOrMessage : null
-        const message = hasMessage ? messageParts.join(' ') : chatIdOrMessage
-        const result = await createComponent(chatId, message)
-        console.log(JSON.stringify(result, null, 2))
-        break
-      }
       case 'get_chat_list': {
         const [limit, offset] = args
         const result = await getChatList({ limit, offset })
@@ -218,7 +182,6 @@ async function main() {
         console.log('Usage: node scripts/v0.js <command> [args]')
         console.log('')
         console.log('Commands:')
-        console.log('  create_component <chatId> <prompt>        - Generate component')
         console.log('  get_chat_list [limit] [offset]            - List chats')
         console.log('  get_file_list <chatId>                    - List files in chat')
         console.log('  get_file_content <chatId> [files...]      - Get file contents')
@@ -238,4 +201,4 @@ if (require.main === module) {
   main()
 }
 
-module.exports = { createComponent, getChatList, getChatDetails, getFileList, getFileContent, getFilesByPath }
+module.exports = { getChatList, getChatDetails, getFileList, getFileContent, getFilesByPath }

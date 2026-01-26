@@ -7,9 +7,6 @@ Command-line interface for v0 Platform API.
 ### Commands
 
 ```bash
-# Generate component
-node scripts/v0.js create_component <chatId> <prompt>
-
 # List chats
 node scripts/v0.js get_chat_list [limit] [offset]
 
@@ -26,9 +23,6 @@ node scripts/v0.js get_files_by_path <chatId> <path> [-f]
 ### Examples
 
 ```bash
-# Create dashboard component
-node scripts/v0.js create_component my-dashboard "Dashboard with sidebar and cards. Next.js 14, Tailwind"
-
 # List recent chats
 node scripts/v0.js get_chat_list 10 0
 
@@ -62,12 +56,10 @@ node scripts/v0.test.js --help
 ### Test Coverage
 
 1. **get_chat_list** - Retrieve and validate chat list
-2. **create_component** - Generate new component
-3. **get_file_list** - List files in chat
-4. **get_file_content** (all files) - Retrieve all file contents
-5. **get_file_content** (specific) - Retrieve specific file
-6. **get_files_by_path** - Path-based file retrieval
-7. **Iterative refinement** - Update existing component
+2. **get_file_list** - List files in chat
+3. **get_file_content** (all files) - Retrieve all file contents
+4. **get_file_content** (specific) - Retrieve specific file
+5. **get_files_by_path** - Path-based file retrieval
 
 ### Output
 
@@ -87,27 +79,16 @@ Tests provide colored output:
   ✓ Retrieved 5 chat(s)
   First chat: abc123
 
-▶ Test: create_component
-  Creating chat: test-v0-api-1234567890-xyz
-  ✓ Component created with 2 file(s)
-  Description: I've created a simple button component with...
-  Demo URL: https://v0.dev/chat/test-v0-api-1234567890-xyz/preview
-    - button.tsx (tsx)
-    - types.ts (ts)
-
 ...
 
 ═══════════════════════════════════════
   Test Summary
 ═══════════════════════════════════════
 
-Total:   7
-Passed:  7
+Total:   5
+Passed:  5
 Failed:  0
 Skipped: 0
-
-Test chat created: test-v0-api-1234567890-xyz
-View at: https://v0.dev/chat/test-v0-api-1234567890-xyz
 ```
 
 ## Setup

@@ -6,7 +6,6 @@ v0 Platform API generates production-ready React components with proper architec
 
 | Command | Purpose | Usage |
 |---------|---------|-------|
-| `create_component` | Generate UI component | `node scripts/v0.js create_component <chatId> <prompt>` |
 | `get_chat_list` | List existing chats | `node scripts/v0.js get_chat_list [limit] [offset]` |
 | `get_file_list` | List files in chat | `node scripts/v0.js get_file_list <chatId>` |
 | `get_file_content` | Get source code | `node scripts/v0.js get_file_content <chatId> [file1] [file2]...` |
@@ -21,13 +20,6 @@ v0 Platform API generates production-ready React components with proper architec
    ```
 
 ## Commands
-
-### create_component
-```bash
-node scripts/v0.js create_component <chatId> <prompt>
-```
-- `chatId`: Unique chat identifier (use existing or new)
-- `prompt`: Component description
 
 ### get_chat_list
 ```bash
@@ -125,58 +117,40 @@ Include for best results:
 
 ## Workflows
 
-### Create Dashboard
+### Explore Project Structure
 
 ```bash
-# Generate
-node scripts/v0.js create_component new-dashboard "Dashboard: sidebar with nav links, top bar with search, main area with 3 metric cards and data table. Next.js 14, Tailwind, shadcn/ui"
-
-# Refine
-node scripts/v0.js create_component <chatId> "Add dark mode toggle to top bar, make cards clickable"
-
-# Extract
-node scripts/v0.js get_file_content <chatId>
-```
-
-### Iterate Existing Component
-
-```bash
+# Find your project
 node scripts/v0.js get_chat_list
-node scripts/v0.js get_file_content <chatId> component.tsx
-node scripts/v0.js create_component <chatId> "Add loading skeleton, error boundary, optimize for mobile"
+
+# See all files in the project
+node scripts/v0.js get_file_list <chatId>
+
+# Get everything
 node scripts/v0.js get_file_content <chatId>
 ```
 
-### Multi-Component App
+### Get Content from Specific Files
 
 ```bash
-# Create components in separate chats
-node scripts/v0.js create_component app-layout "App layout: header, sidebar, main content. Next.js 14, Tailwind"
-node scripts/v0.js create_component header-nav "Header: logo, search, user menu. Responsive. Tailwind, shadcn/ui"
-node scripts/v0.js create_component sidebar-nav "Sidebar: collapsible, icons, active states. Tailwind"
+# Get a specific component file
+node scripts/v0.js get_file_content <chatId> components/Button.tsx
 
-# Extract all
-node scripts/v0.js get_file_content app-layout
-node scripts/v0.js get_file_content header-nav
-node scripts/v0.js get_file_content sidebar-nav
+# Get multiple specific files
+node scripts/v0.js get_file_content <chatId> components/Card.tsx lib/utils.ts
 ```
 
-### Form with Validation
-
-```bash
-node scripts/v0.js create_component contact-form "Contact form: name, email, message. Validation: required, valid email. Inline errors, loading state. Next.js 14, Tailwind, shadcn/ui"
-node scripts/v0.js create_component <chatId> "Add character count (max 500). Disable submit if invalid."
-node scripts/v0.js get_file_content <chatId>
-```
-
-### Extract Code by Path
+### Get All Files Under a Path
 
 ```bash
 # Get all components (JSON output)
 node scripts/v0.js get_files_by_path <chatId> components
 
 # Get all utilities (formatted output with file separators)
-node scripts/v0.js get_files_by_path <chatId> lib/utils -f
+node scripts/v0.js get_files_by_path <chatId> lib -f
+
+# Get hooks
+node scripts/v0.js get_files_by_path <chatId> hooks
 
 # Output example (formatted):
 # === Path: components ===
@@ -227,7 +201,6 @@ Response includes `text` (description), `demo` (preview URL), and `files` array 
 **Base URL**: `https://api.v0.dev/v1`
 
 **Functions**:
-- `createComponent(chatId, prompt, options)` - Generate component
 - `getChatList(options)` - List chats with pagination
 - `getFileList(chatId)` - List files in chat
 - `getFileContent(chatId, options)` - Get file contents
