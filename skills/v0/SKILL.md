@@ -10,6 +10,7 @@ v0 Platform API generates production-ready React components with proper architec
 | `get_chat_list` | List existing chats | `node scripts/v0.js get_chat_list [limit] [offset]` |
 | `get_file_list` | List files in chat | `node scripts/v0.js get_file_list <chatId>` |
 | `get_file_content` | Get source code | `node scripts/v0.js get_file_content <chatId> [file1] [file2]...` |
+| `get_files_by_path` | Get files under path | `node scripts/v0.js get_files_by_path <chatId> <path>` |
 
 ## Setup
 
@@ -46,6 +47,16 @@ Lists all source files in a chat.
 node scripts/v0.js get_file_content <chatId> [file1] [file2] ...
 ```
 Retrieves source code. Omit file names to get all files.
+
+### get_files_by_path
+```bash
+node scripts/v0.js get_files_by_path <chatId> <path> [-f]
+```
+Retrieves all files and their content under a specific path.
+- `path`: Path pattern (e.g., "components", "/lib/utils", "src/hooks")
+- `-f, --format`: Format output with file separators (optional)
+
+**Output**: JSON with `path`, `count`, and `files` array (each file has `name`, `lang`, `source`)
 
 ## Prompt Patterns
 
@@ -158,6 +169,26 @@ node scripts/v0.js create_component <chatId> "Add character count (max 500). Dis
 node scripts/v0.js get_file_content <chatId>
 ```
 
+### Extract Code by Path
+
+```bash
+# Get all components (JSON output)
+node scripts/v0.js get_files_by_path <chatId> components
+
+# Get all utilities (formatted output with file separators)
+node scripts/v0.js get_files_by_path <chatId> lib/utils -f
+
+# Output example (formatted):
+# === Path: components ===
+# Found 3 file(s)
+#
+# ================================================================================
+# File 1/3: components/Button.tsx
+# Language: tsx
+# ================================================================================
+# [source code here]
+```
+
 ## Best Practices
 
 ### Iteration Strategy
@@ -200,3 +231,4 @@ Response includes `text` (description), `demo` (preview URL), and `files` array 
 - `getChatList(options)` - List chats with pagination
 - `getFileList(chatId)` - List files in chat
 - `getFileContent(chatId, options)` - Get file contents
+- `getFilesByPath(chatId, pathPattern)` - Get files under path

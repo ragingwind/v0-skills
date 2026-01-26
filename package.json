@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "Claude Code skill for v0 development",
   "main": "skill.md",
+  "scripts": {
+    "link": "ln -sf \"$(pwd)/skills/v0\" ~/.claude/skills/v0",
+    "unlink": "rm -f ~/.claude/skills/v0"
+  },
   "keywords": [
     "claude-code-skill"
   ],
