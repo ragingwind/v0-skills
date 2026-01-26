@@ -1,0 +1,11 @@
+{
+  "name": "v0-skills",
+  "version": "0.1.0",
+  "description": "Claude Code skill for v0 development",
+  "main": "skill.md",
+  "keywords": [
+    "claude-code-skill"
+  ],
+  "author": "",
+  "license": "MIT"
+}
