@@ -1,0 +1,10 @@
+{
+  "name": "v0-skills",
+  "version": "1.0.0",
+  "description": "v0 Platform API development skills and utilities",
+  "author": {
+    "name": "Jimmy Moon",
+    "email": "ragingwind@gmail.com"
+  },
+  "keywords": ["v0", "vercel", "api", "development", "skills"]
+}

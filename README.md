@@ -1,22 +1,21 @@
 # v0-skills
 
-A Claude Code skill for v0 development workflows.
+A Claude Code skill for [v0](https://v0.dev) development with React, TypeScript, and modern web best practices.
 
 ## Installation
 
-To use this skill with Claude Code:
-
 ```bash
-# Link the skill locally (from this directory)
-claude-code skill link
-
-# Or install from a repository
-claude-code skill install <repository-url>
+npx skills install ragingwind/v0-skills
 ```
 
-## Usage
+Local development:
+```bash
+npx skills link
+```
 
-Activate the skill in your Claude Code session:
+Learn more at [skills.sh](https://skills.sh/)
+
+## Usage
 
 ```
 /v0-skills
@@ -24,11 +23,9 @@ Activate the skill in your Claude Code session:
 
 ## Development
 
-To modify this skill:
-
-1. Edit `skill.md` to update the skill instructions
-2. Update `package.json` for metadata changes
-3. Test the skill locally using `claude-code skill link`
+1. Edit `skill.md` for skill instructions
+2. Update `package.json` for metadata
+3. Test locally with `npx skills link`
 
 ## License
 
