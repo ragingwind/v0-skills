@@ -52,12 +52,6 @@ Or add it to your shell profile for persistence.
 npx skills install ragingwind/v0-skills
 ```
 
-Local development:
-
-```bash
-npx skills link
-```
-
 Learn more at [skills.sh](https://skills.sh/)
 
 ## Usage
@@ -70,8 +64,7 @@ Learn more at [skills.sh](https://skills.sh/)
 
 1. Edit `SKILL.md` for skill instructions
 2. Update `scripts/v0.js` for API functions and CLI commands
-3. Test locally with `npx skills link`
-4. Run tests: `node skills/v0/scripts/v0.test.js`
+3. Run tests: `node skills/v0/scripts/v0.test.js`
 
 ## License
 
