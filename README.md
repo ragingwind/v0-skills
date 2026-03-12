@@ -48,11 +48,11 @@ Or add it to your shell profile for persistence.
 
 ## Installation
 
-```bash
-npx skills install ragingwind/v0-skills
-```
+Symlink the skill into your Claude Code skills directory:
 
-Learn more at [skills.sh](https://skills.sh/)
+```bash
+ln -s /path/to/v0-skills/skills/v0 ~/.claude/skills/v0
+```
 
 ## Usage
 
