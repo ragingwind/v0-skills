@@ -2,20 +2,18 @@
 
 /**
  * v0 API Test Suite
- * Tests all v0 API commands with real API calls
  *
  * Usage:
- *   node scripts/v0.test.js              - Run all tests
- *   node scripts/v0.test.js --quick      - Quick test (skip creation)
- *   node scripts/v0.test.js --cleanup    - Cleanup test chats
+ *   node scripts/v0.test.js              - Run read-only tests
+ *   node scripts/v0.test.js --write      - Include write tests (create/send_message)
  */
 
-const { getChatList, getFileList, getFileContent, getFilesByPath } = require('./v0.js')
+const {
+  getChatList, getFileList, getFileContent, searchChats,
+  createChat, pollUntilComplete, sendMessage, waitForNewVersion,
+  getVersionList
+} = require('./v0.js')
 
-// Test configuration
-const TEST_CHAT_PREFIX = 'test-v0-api-'
-
-// ANSI colors for output
 const colors = {
   reset: '\x1b[0m',
   green: '\x1b[32m',
@@ -46,27 +44,26 @@ function logInfo(message) {
   log(`  ${message}`, colors.dim)
 }
 
-// Test helpers
 async function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-// Test Suite
-const tests = {
+// ─── Read Tests ───────────────────────────────────────────────────────────────
+
+const readTests = {
   async testGetChatList() {
-    logTest('Test: get_chat_list')
+    logTest('get_chat_list')
 
     try {
       const result = await getChatList({ limit: '5', offset: '0' })
 
       if (!result.data || !Array.isArray(result.data)) {
-        throw new Error('Invalid response structure')
+        throw new Error('Invalid response: expected { data: [...] }')
       }
 
       logSuccess(`Retrieved ${result.data.length} chat(s)`)
-
       if (result.data.length > 0) {
-        logInfo(`First chat: ${result.data[0].id}`)
+        logInfo(`First: ${result.data[0].id} — ${result.data[0].name || '(unnamed)'}`)
       }
 
       return { success: true, data: result }
@@ -77,10 +74,10 @@ const tests = {
   },
 
   async testGetFileList(chatId) {
-    logTest('Test: get_file_list')
+    logTest('get_file_list')
 
     if (!chatId) {
-      logError('No chatId provided (skipped)')
+      logError('No chatId (skipped)')
       return { success: false, skipped: true }
     }
 
@@ -88,14 +85,11 @@ const tests = {
       const result = await getFileList(chatId)
 
       if (!result.files || !Array.isArray(result.files)) {
-        throw new Error('Invalid response structure')
+        throw new Error('Invalid response: expected { files: [...] }')
       }
 
-      logSuccess(`Found ${result.files.length} file(s)`)
-
-      result.files.forEach(file => {
-        logInfo(`  - ${file.name} (${file.lang})`)
-      })
+      logSuccess(`Found ${result.files.length} file(s) in version ${result.versionId}`)
+      result.files.forEach(f => logInfo(`  - ${f.name} (${f.lang})`))
 
       return { success: true, data: result }
     } catch (error) {
@@ -105,10 +99,10 @@ const tests = {
   },
 
   async testGetFileContent(chatId) {
-    logTest('Test: get_file_content (all files)')
+    logTest('get_file_content (all files)')
 
     if (!chatId) {
-      logError('No chatId provided (skipped)')
+      logError('No chatId (skipped)')
       return { success: false, skipped: true }
     }
 
@@ -116,14 +110,16 @@ const tests = {
       const result = await getFileContent(chatId)
 
       if (!result.files || !Array.isArray(result.files)) {
-        throw new Error('Invalid response structure')
+        throw new Error('Invalid response: expected { files: [...] }')
       }
 
-      logSuccess(`Retrieved ${result.files.length} file(s) with content`)
+      result.files.forEach(f => {
+        if (!f.source) throw new Error(`File ${f.name} has no source content`)
+      })
 
-      result.files.forEach(file => {
-        const lines = file.source.split('\n').length
-        logInfo(`  - ${file.name}: ${lines} lines`)
+      logSuccess(`Retrieved ${result.files.length} file(s) with content`)
+      result.files.forEach(f => {
+        logInfo(`  - ${f.name}: ${f.source.split('\n').length} lines`)
       })
 
       return { success: true, data: result }
@@ -134,10 +130,10 @@ const tests = {
   },
 
   async testGetFileContentSpecific(chatId, fileName) {
-    logTest('Test: get_file_content (specific file)')
+    logTest('get_file_content (specific file)')
 
     if (!chatId || !fileName) {
-      logError('No chatId or fileName provided (skipped)')
+      logError('No chatId or fileName (skipped)')
       return { success: false, skipped: true }
     }
 
@@ -149,9 +145,7 @@ const tests = {
       }
 
       const file = result.files[0]
-      const lines = file.source.split('\n').length
-
-      logSuccess(`Retrieved ${file.name}: ${lines} lines`)
+      logSuccess(`Retrieved ${file.name}: ${file.source.split('\n').length} lines`)
 
       return { success: true, data: result }
     } catch (error) {
@@ -160,78 +154,33 @@ const tests = {
     }
   },
 
-  async testGetFilesByPath(chatId) {
-    logTest('Test: get_files_by_path')
-
-    if (!chatId) {
-      logError('No chatId provided (skipped)')
-      return { success: false, skipped: true }
-    }
+  async testSearchChats() {
+    logTest('search_chats')
 
     try {
-      // First get file list to find a valid path
-      const fileList = await getFileList(chatId)
+      const chatList = await getChatList({ limit: '1' })
+      const chats = chatList.data || []
 
-      if (fileList.files.length === 0) {
-        logError('No files to test with (skipped)')
+      if (chats.length === 0) {
+        logInfo('No chats available')
         return { success: false, skipped: true }
       }
 
-      // Extract path from first file (e.g., "components/Button.tsx" -> "components")
-      const firstFile = fileList.files[0].name
-      let testPath = firstFile.includes('/')
-        ? firstFile.split('/')[0]
-        : firstFile.split('.')[0]
+      const query = (chats[0].name || chats[0].id).substring(0, 3)
+      logInfo(`Searching for: "${query}"`)
 
-      logInfo(`Testing path: ${testPath}`)
+      const result = await searchChats(query, { searchFiles: false })
 
-      const result = await getFilesByPath(chatId, testPath)
-
-      if (!result.files || !Array.isArray(result.files)) {
-        throw new Error('Invalid response structure')
+      if (!result.query || !Array.isArray(result.results)) {
+        throw new Error('Invalid response: expected { query, results: [...] }')
       }
 
-      if (result.path !== testPath) {
-        throw new Error(`Path mismatch: expected ${testPath}, got ${result.path}`)
-      }
-
-      logSuccess(`Found ${result.count} file(s) under path "${result.path}"`)
-
-      result.files.forEach(file => {
-        const lines = file.source.split('\n').length
-        logInfo(`  - ${file.name}: ${lines} lines`)
+      logSuccess(`Found ${result.results.length} result(s)`)
+      result.results.slice(0, 3).forEach(r => {
+        logInfo(`  - ${r.name} (${r.matchType})`)
       })
 
       return { success: true, data: result }
-    } catch (error) {
-      logError(`Failed: ${error.message}`)
-      return { success: false, error }
-    }
-  },
-
-  async cleanupTestChats() {
-    logTest('Cleanup: Remove test chats')
-
-    try {
-      const result = await getChatList({ limit: '100', offset: '0' })
-      const testChats = result.data.filter(chat =>
-        chat.id.startsWith(TEST_CHAT_PREFIX)
-      )
-
-      if (testChats.length === 0) {
-        logInfo('No test chats to cleanup')
-        return { success: true, cleaned: 0 }
-      }
-
-      logInfo(`Found ${testChats.length} test chat(s) to cleanup`)
-      logInfo('Note: v0 API does not support chat deletion via API')
-      logInfo('Please delete these chats manually from https://v0.dev/chat')
-
-      testChats.forEach(chat => {
-        logInfo(`  - ${chat.id}`)
-      })
-
-      return { success: true, cleaned: testChats.length }
     } catch (error) {
       logError(`Failed: ${error.message}`)
       return { success: false, error }
@@ -239,89 +188,138 @@ const tests = {
   }
 }
 
-// Main test runner
+// ─── Write Tests ──────────────────────────────────────────────────────────────
+
+const writeTests = {
+  async testCreateChat() {
+    logTest('create_chat')
+
+    try {
+      console.log('  Creating chat...')
+      const chat = await createChat('Create a simple React button component with primary and secondary variants. Use Tailwind CSS.')
+      const chatId = chat.id || chat.chatId
+
+      if (!chatId) throw new Error('No chatId in response')
+      logSuccess(`Chat created: ${chatId}`)
+
+      console.log('  Waiting for generation...')
+      const version = await pollUntilComplete(chatId, 180000)
+      const files = version.files || []
+
+      if (files.length === 0) throw new Error('No files generated')
+
+      files.forEach(f => {
+        if (!f.content) throw new Error(`File ${f.name} has no content`)
+      })
+
+      logSuccess(`Version ${version.id}: ${files.length} file(s)`)
+      files.forEach(f => logInfo(`  - ${f.name} (${f.content.length} bytes)`))
+
+      return { success: true, data: { chatId, versionId: version.id } }
+    } catch (error) {
+      logError(`Failed: ${error.message}`)
+      return { success: false, error }
+    }
+  },
+
+  async testSendMessage(chatId) {
+    logTest('send_message')
+
+    if (!chatId) {
+      logError('No chatId (skipped)')
+      return { success: false, skipped: true }
+    }
+
+    try {
+      const versionsBefore = await getVersionList(chatId)
+      const prevVersionId = (versionsBefore.data || [])[0]?.id
+
+      console.log('  Sending follow-up message...')
+      await sendMessage(chatId, 'Add a loading state with a spinner to the button')
+
+      console.log('  Waiting for new version...')
+      const version = await waitForNewVersion(chatId, prevVersionId, 180000)
+      const files = version.files || []
+
+      if (files.length === 0) throw new Error('No files in new version')
+      if (version.id === prevVersionId) throw new Error('Version did not change')
+
+      logSuccess(`New version ${version.id}: ${files.length} file(s)`)
+
+      return { success: true, data: { chatId, versionId: version.id } }
+    } catch (error) {
+      logError(`Failed: ${error.message}`)
+      return { success: false, error }
+    }
+  }
+}
+
+// ─── Test Runner ──────────────────────────────────────────────────────────────
+
 async function runTests(options = {}) {
   log('\n═══════════════════════════════════════', colors.blue)
   log('  v0 API Test Suite', colors.blue)
   log('═══════════════════════════════════════\n', colors.blue)
 
-  const results = {
-    total: 0,
-    passed: 0,
-    failed: 0,
-    skipped: 0
+  const results = { total: 0, passed: 0, failed: 0, skipped: 0 }
+
+  function record(result) {
+    results.total++
+    if (result.success) results.passed++
+    else if (result.skipped) results.skipped++
+    else results.failed++
   }
 
   let testChatId = null
   let testFileName = null
 
   try {
-    // Check API key
     if (!process.env.V0_API_KEY) {
       logError('V0_API_KEY environment variable not set')
       process.exit(1)
     }
 
-    // Test 1: Get chat list
-    results.total++
-    const chatListResult = await tests.testGetChatList()
-    if (chatListResult.success) {
-      results.passed++
-      // Use first chat from list for subsequent tests
-      if (chatListResult.data?.data?.length > 0) {
-        testChatId = chatListResult.data.data[0].id
-      }
-    } else {
-      results.failed++
+    // ─── Read Tests ─────────────────────────────────────────────────────
+
+    log('\n── Read Tests ──\n', colors.blue)
+
+    const chatListResult = await readTests.testGetChatList()
+    record(chatListResult)
+    if (chatListResult.data?.data?.length > 0) {
+      testChatId = chatListResult.data.data[0].id
     }
-
     await sleep(500)
 
-    // Test 2: Get file list
-    results.total++
-    const fileListResult = await tests.testGetFileList(testChatId)
-    if (fileListResult.success) {
-      results.passed++
-      if (fileListResult.data?.files?.length > 0) {
-        testFileName = fileListResult.data.files[0].name
-      }
-    } else if (fileListResult.skipped) {
-      results.skipped++
-    } else {
-      results.failed++
+    const fileListResult = await readTests.testGetFileList(testChatId)
+    record(fileListResult)
+    if (fileListResult.data?.files?.length > 0) {
+      testFileName = fileListResult.data.files[0].name
     }
-
     await sleep(500)
 
-    // Test 3: Get file content (all)
-    results.total++
-    const fileContentResult = await tests.testGetFileContent(testChatId)
-    if (fileContentResult.success) results.passed++
-    else if (fileContentResult.skipped) results.skipped++
-    else results.failed++
-
+    record(await readTests.testGetFileContent(testChatId))
     await sleep(500)
 
-    // Test 4: Get file content (specific)
-    results.total++
-    const fileContentSpecificResult = await tests.testGetFileContentSpecific(testChatId, testFileName)
-    if (fileContentSpecificResult.success) results.passed++
-    else if (fileContentSpecificResult.skipped) results.skipped++
-    else results.failed++
-
+    record(await readTests.testGetFileContentSpecific(testChatId, testFileName))
     await sleep(500)
 
-    // Test 5: Get files by path
-    results.total++
-    const filesByPathResult = await tests.testGetFilesByPath(testChatId)
-    if (filesByPathResult.success) results.passed++
-    else if (filesByPathResult.skipped) results.skipped++
-    else results.failed++
+    record(await readTests.testSearchChats())
 
-    // Cleanup if requested
-    if (options.cleanup) {
-      await sleep(500)
-      await tests.cleanupTestChats()
+    // ─── Write Tests ────────────────────────────────────────────────────
+
+    if (options.write) {
+      log('\n── Write Tests ──\n', colors.blue)
+      log('  ⚠  Write tests create real v0 chats and consume API credits\n', colors.yellow)
+
+      const createResult = await writeTests.testCreateChat()
+      record(createResult)
+
+      const writeChatId = createResult.data?.chatId
+      await sleep(1000)
+
+      record(await writeTests.testSendMessage(writeChatId))
+    } else {
+      log('\n── Write Tests (skipped, use --write to enable) ──\n', colors.yellow)
     }
 
   } catch (error) {
@@ -329,7 +327,7 @@ async function runTests(options = {}) {
     console.error(error)
   }
 
-  // Print summary
+  // Summary
   log('\n═══════════════════════════════════════', colors.blue)
   log('  Test Summary', colors.blue)
   log('═══════════════════════════════════════\n', colors.blue)
@@ -343,27 +341,22 @@ async function runTests(options = {}) {
     log(`\n${colors.dim}Tested with chat: ${testChatId}${colors.reset}`)
   }
 
-  const exitCode = results.failed > 0 ? 1 : 0
-  process.exit(exitCode)
+  process.exit(results.failed > 0 ? 1 : 0)
 }
 
-// CLI handler
-const args = process.argv.slice(2)
-const options = {
-  cleanup: args.includes('--cleanup')
-}
+// CLI
+const cliArgs = process.argv.slice(2)
 
-if (args.includes('--help') || args.includes('-h')) {
+if (cliArgs.includes('--help') || cliArgs.includes('-h')) {
   console.log('v0 API Test Suite')
   console.log('')
   console.log('Usage:')
-  console.log('  node scripts/v0.test.js              Run all tests')
-  console.log('  node scripts/v0.test.js --cleanup    Cleanup test chats')
-  console.log('  node scripts/v0.test.js --help       Show this help')
+  console.log('  node scripts/v0.test.js              Run read-only tests')
+  console.log('  node scripts/v0.test.js --write      Include write tests')
   console.log('')
   console.log('Environment:')
   console.log('  V0_API_KEY    Required. Get from https://v0.dev/chat/settings/keys')
   process.exit(0)
 }
 
-runTests(options)
+runTests({ write: cliArgs.includes('--write') })

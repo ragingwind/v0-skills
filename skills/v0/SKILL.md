@@ -1,6 +1,6 @@
 # v0 Platform API Skill
 
-v0 Platform API generates production-ready React components with proper architecture, accessibility, and responsive design.
+v0 Platform API generates production-ready React components with proper architecture, accessibility, and responsive design. All commands output JSON for direct agent consumption.
 
 ## Quick Reference
 
@@ -9,7 +9,9 @@ v0 Platform API generates production-ready React components with proper architec
 | `get_chat_list` | List existing chats | `node scripts/v0.js get_chat_list [limit] [offset]` |
 | `get_file_list` | List files in chat | `node scripts/v0.js get_file_list <chatId>` |
 | `get_file_content` | Get source code | `node scripts/v0.js get_file_content <chatId> [file1] [file2]...` |
-| `get_files_by_path` | Get files under path | `node scripts/v0.js get_files_by_path <chatId> <path>` |
+| `search_chats` | Search chats by name/files | `node scripts/v0.js search_chats <query> [-f]` |
+| `create_chat` | Generate from prompt | `node scripts/v0.js create_chat <prompt> [--privacy public\|private]` |
+| `send_message` | Follow-up message | `node scripts/v0.js send_message <chatId> <message>` |
 
 ## Setup
 
@@ -25,14 +27,18 @@ v0 Platform API generates production-ready React components with proper architec
 ```bash
 node scripts/v0.js get_chat_list [limit] [offset]
 ```
-- `limit`: Results per page (default: 20)
+- `limit`: Results per page (default: 10)
 - `offset`: Results to skip (default: 0)
+
+**Output:** `{ "data": [{ "id", "name", "createdAt" }] }`
 
 ### get_file_list
 ```bash
 node scripts/v0.js get_file_list <chatId>
 ```
-Lists all source files in a chat.
+Lists source files in a chat's latest valid version.
+
+**Output:** `{ "versionId", "files": [{ "name", "lang" }] }`
 
 ### get_file_content
 ```bash
@@ -40,68 +46,75 @@ node scripts/v0.js get_file_content <chatId> [file1] [file2] ...
 ```
 Retrieves source code. Omit file names to get all files.
 
-### get_files_by_path
-```bash
-node scripts/v0.js get_files_by_path <chatId> <path> [-f]
-```
-Retrieves all files and their content under a specific path.
-- `path`: Path pattern (e.g., "components", "/lib/utils", "src/hooks")
-- `-f, --format`: Format output with file separators (optional)
+**Output:** `{ "versionId", "files": [{ "name", "lang", "source" }] }`
 
-**Output**: JSON with `path`, `count`, and `files` array (each file has `name`, `lang`, `source`)
+### search_chats
+```bash
+node scripts/v0.js search_chats <query> [-f]
+```
+Searches chats by name. With `-f` or `--files`, also searches file names within each chat.
+
+**Output:** `{ "query", "results": [{ "chatId", "name", "matchType", "files?" }] }`
+
+### create_chat
+```bash
+node scripts/v0.js create_chat <prompt> [--privacy public|private]
+```
+Creates a new v0 chat, waits for generation, and returns generated files with source code.
+
+**Output:** `{ "chatId", "versionId", "demoUrl", "files": [{ "name", "lang", "source" }] }`
+
+### send_message
+```bash
+node scripts/v0.js send_message <chatId> <message>
+```
+Sends a follow-up message and waits for the new version. Returns updated files with source code.
+
+**Output:** `{ "chatId", "versionId", "demoUrl", "files": [{ "name", "lang", "source" }] }`
+
+## Workflows
+
+### Fetch code from v0
+
+```bash
+# 1. Find the chat
+node scripts/v0.js get_chat_list
+# or search
+node scripts/v0.js search_chats "dashboard"
+
+# 2. Get the code
+node scripts/v0.js get_file_content <chatId>
+# or specific files only
+node scripts/v0.js get_file_content <chatId> Button.tsx DataTable.tsx
+```
+
+### Generate new UI and get code
+
+```bash
+# 1. Generate — returns chatId + full source code
+node scripts/v0.js create_chat "Data table with sorting, filtering, pagination. Next.js 14, Tailwind, shadcn/ui"
+
+# 2. Iterate if needed — returns updated source code
+node scripts/v0.js send_message <chatId> "Add dark mode support and make columns resizable"
+```
 
 ## Prompt Patterns
 
 ### Effective Prompts
 
-✅ **Specific with context**
+**Specific with context**
 ```
 "Dashboard with sidebar nav, top bar, 3 metric cards. Next.js 14, Tailwind, shadcn/ui"
 ```
 
-❌ **Too vague**
-```
-"Make a dashboard"
-```
-
-✅ **Functional requirements**
+**Functional requirements**
 ```
 "Product card: image, title, price, add-to-cart button. Hover effects, responsive"
 ```
 
-❌ **Over-specified implementation**
-```
-"Create a div with className flex and children including an img tag..."
-```
-
-✅ **Include framework and styling**
-```
-"User profile form with email, name, avatar upload. Next.js 14, Tailwind, shadcn/ui. Validation and loading states."
-```
-
-❌ **Missing technical context**
-```
-"Make a form"
-```
-
-✅ **Specify interactions and states**
+**Specify interactions and states**
 ```
 "Modal for image gallery. Close button, overlay, keyboard navigation (Esc), accessible. Tailwind."
-```
-
-❌ **Static description only**
-```
-"A modal with images"
-```
-
-✅ **Table with interactions**
-```
-"Data table: name, email, status columns. Sortable headers, search bar, pagination. Loading skeleton, empty state. Next.js 14, Tailwind, shadcn/ui"
-```
-
-❌ **Missing interactions**
-```
-"Create a table"
 ```
 
 ### Prompt Checklist
@@ -114,54 +127,6 @@ Include for best results:
 - State requirements (loading, error, empty)
 - Responsive breakpoints
 - Accessibility needs
-
-## Workflows
-
-### Explore Project Structure
-
-```bash
-# Find your project
-node scripts/v0.js get_chat_list
-
-# See all files in the project
-node scripts/v0.js get_file_list <chatId>
-
-# Get everything
-node scripts/v0.js get_file_content <chatId>
-```
-
-### Get Content from Specific Files
-
-```bash
-# Get a specific component file
-node scripts/v0.js get_file_content <chatId> components/Button.tsx
-
-# Get multiple specific files
-node scripts/v0.js get_file_content <chatId> components/Card.tsx lib/utils.ts
-```
-
-### Get All Files Under a Path
-
-```bash
-# Get all components (JSON output)
-node scripts/v0.js get_files_by_path <chatId> components
-
-# Get all utilities (formatted output with file separators)
-node scripts/v0.js get_files_by_path <chatId> lib -f
-
-# Get hooks
-node scripts/v0.js get_files_by_path <chatId> hooks
-
-# Output example (formatted):
-# === Path: components ===
-# Found 3 file(s)
-#
-# ================================================================================
-# File 1/3: components/Button.tsx
-# Language: tsx
-# ================================================================================
-# [source code here]
-```
 
 ## Best Practices
 
@@ -177,17 +142,9 @@ node scripts/v0.js get_files_by_path <chatId> hooks
 - >5-6 iterations in current chat
 - Switching between unrelated components
 
-### Prompt Structure
-- Component type and purpose
-- Key elements and content
-- Interactions (hover, click, keyboard)
-- States (loading, error, disabled, active)
-- Framework and styling approach
-- Responsive requirements
-
 ## Output Format
 
-Response includes `text` (description), `demo` (preview URL), and `files` array with `lang`, `file`, `source`.
+All commands output JSON. `create_chat` and `send_message` include full source code in the response — no separate `get_file_content` call needed after generation.
 
 **File Patterns:**
 - Single: `component.tsx`
@@ -195,13 +152,3 @@ Response includes `text` (description), `demo` (preview URL), and `files` array 
 - With styles: `component.tsx`, `styles.module.css`
 
 **Defaults:** Tailwind CSS, React hooks, TypeScript, semantic HTML, mobile-first. Override by specifying in prompts.
-
-## API Reference
-
-**Base URL**: `https://api.v0.dev/v1`
-
-**Functions**:
-- `getChatList(options)` - List chats with pagination
-- `getFileList(chatId)` - List files in chat
-- `getFileContent(chatId, options)` - Get file contents
-- `getFilesByPath(chatId, pathPattern)` - Get files under path
