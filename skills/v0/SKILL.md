@@ -1,3 +1,8 @@
+---
+name: v0
+description: v0 Platform API — fetch code from v0 chats and generate new UI components with natural language prompts.
+---
+
 # v0 Platform API Skill
 
 v0 Platform API generates production-ready React components with proper architecture, accessibility, and responsive design. All commands output JSON for direct agent consumption.

@@ -52,10 +52,10 @@ Or add it to your shell profile for persistence.
 npx skills add ragingwind/v0-skills -g
 ```
 
-For local development:
+For local development (from the repo root):
 
 ```bash
-npx skills add /path/to/v0-skills -g
+npx skills add . -g
 ```
 
 ## Usage
