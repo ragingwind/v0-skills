@@ -9,7 +9,7 @@
  */
 
 const {
-  getChatList, getFileList, getFileContent, searchChats,
+  getChatList, getChatDetails, getFileList, getFileContent, searchChats,
   createChat, pollUntilComplete, sendMessage, waitForNewVersion,
   getVersionList
 } = require('./v0.js')
@@ -146,6 +146,94 @@ const readTests = {
 
       const file = result.files[0]
       logSuccess(`Retrieved ${file.name}: ${file.source.split('\n').length} lines`)
+
+      return { success: true, data: result }
+    } catch (error) {
+      logError(`Failed: ${error.message}`)
+      return { success: false, error }
+    }
+  },
+
+  async testGetChatDetails(chatId) {
+    logTest('get_chat_details')
+
+    if (!chatId) {
+      logError('No chatId (skipped)')
+      return { success: false, skipped: true }
+    }
+
+    try {
+      const result = await getChatDetails(chatId)
+
+      if (!result.id) {
+        throw new Error('Invalid response: expected { id, ... }')
+      }
+
+      logSuccess(`Chat: ${result.id} — ${result.name || '(unnamed)'}`)
+
+      return { success: true, data: result }
+    } catch (error) {
+      logError(`Failed: ${error.message}`)
+      return { success: false, error }
+    }
+  },
+
+  async testGetVersionList(chatId) {
+    logTest('get_version_list')
+
+    if (!chatId) {
+      logError('No chatId (skipped)')
+      return { success: false, skipped: true }
+    }
+
+    try {
+      const result = await getVersionList(chatId)
+
+      if (!result.data || !Array.isArray(result.data)) {
+        throw new Error('Invalid response: expected { data: [...] }')
+      }
+
+      logSuccess(`Found ${result.data.length} version(s)`)
+      result.data.slice(0, 3).forEach(v => {
+        logInfo(`  - ${v.id} (${v.status})`)
+      })
+
+      return { success: true, data: result }
+    } catch (error) {
+      logError(`Failed: ${error.message}`)
+      return { success: false, error }
+    }
+  },
+
+  async testGetFileContentWithVersion(chatId) {
+    logTest('get_file_content (specific version)')
+
+    if (!chatId) {
+      logError('No chatId (skipped)')
+      return { success: false, skipped: true }
+    }
+
+    try {
+      const versionResult = await getVersionList(chatId)
+      const versions = versionResult.data || []
+      const completed = versions.find(v => v.status === 'completed')
+
+      if (!completed) {
+        logError('No completed version found (skipped)')
+        return { success: false, skipped: true }
+      }
+
+      logInfo(`Using version: ${completed.id}`)
+      const result = await getFileContent(chatId, { versionId: completed.id })
+
+      if (!result.files || !Array.isArray(result.files)) {
+        throw new Error('Invalid response: expected { files: [...] }')
+      }
+
+      logSuccess(`Retrieved ${result.files.length} file(s) from version ${result.versionId}`)
+      if (result.filtered > 0) {
+        logInfo(`  (${result.filtered} file(s) filtered — GENERATING or empty)`)
+      }
 
       return { success: true, data: result }
     } catch (error) {
@@ -301,6 +389,15 @@ async function runTests(options = {}) {
     await sleep(500)
 
     record(await readTests.testGetFileContentSpecific(testChatId, testFileName))
+    await sleep(500)
+
+    record(await readTests.testGetChatDetails(testChatId))
+    await sleep(500)
+
+    record(await readTests.testGetVersionList(testChatId))
+    await sleep(500)
+
+    record(await readTests.testGetFileContentWithVersion(testChatId))
     await sleep(500)
 
     record(await readTests.testSearchChats())

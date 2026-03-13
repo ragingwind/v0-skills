@@ -10,14 +10,20 @@ Command-line interface for v0 Platform API.
 # List chats
 node scripts/v0.js get_chat_list [limit] [offset]
 
+# Chat details
+node scripts/v0.js get_chat_details <chatId>
+
+# List versions
+node scripts/v0.js get_version_list <chatId>
+
 # List files in chat
-node scripts/v0.js get_file_list <chatId>
+node scripts/v0.js get_file_list <chatId> [--version <id>]
 
 # Get file contents
-node scripts/v0.js get_file_content <chatId> [file1] [file2]...
+node scripts/v0.js get_file_content <chatId> [file1] [file2]... [--version <id>]
 
-# Get files by path
-node scripts/v0.js get_files_by_path <chatId> <path> [-f]
+# Search chats
+node scripts/v0.js search_chats <query> [-f]
 ```
 
 ### Examples
@@ -29,8 +35,11 @@ node scripts/v0.js get_chat_list 10 0
 # Get all files
 node scripts/v0.js get_file_content my-dashboard
 
-# Get components directory (formatted)
-node scripts/v0.js get_files_by_path my-dashboard components -f
+# Get files from a specific version
+node scripts/v0.js get_file_content my-dashboard --version b_abc123
+
+# List all versions
+node scripts/v0.js get_version_list my-dashboard
 ```
 
 ## v0.test.js - Test Suite
@@ -40,14 +49,11 @@ Comprehensive test suite for v0 API commands.
 ### Usage
 
 ```bash
-# Run all tests
+# Run read-only tests
 node scripts/v0.test.js
 
-# Quick test (skip component creation)
-node scripts/v0.test.js --quick
-
-# Cleanup test chats
-node scripts/v0.test.js --cleanup
+# Include write tests (creates real chats)
+node scripts/v0.test.js --write
 
 # Show help
 node scripts/v0.test.js --help
@@ -59,7 +65,10 @@ node scripts/v0.test.js --help
 2. **get_file_list** - List files in chat
 3. **get_file_content** (all files) - Retrieve all file contents
 4. **get_file_content** (specific) - Retrieve specific file
-5. **get_files_by_path** - Path-based file retrieval
+5. **get_chat_details** - Chat details retrieval
+6. **get_version_list** - Version listing
+7. **get_file_content** (specific version) - Version-targeted file retrieval
+8. **search_chats** - Search by name/files
 
 ### Output
 
@@ -85,8 +94,8 @@ Tests provide colored output:
   Test Summary
 ═══════════════════════════════════════
 
-Total:   5
-Passed:  5
+Total:   8
+Passed:  8
 Failed:  0
 Skipped: 0
 ```

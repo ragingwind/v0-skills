@@ -39,14 +39,22 @@ async function getChatList(options = {}) {
  * @param {string} chatId
  * @returns {Promise<{ versionId: string, fallback: boolean, files: Array<{ name, lang }> }>}
  */
-async function getFileList(chatId) {
-  const { version, fallback } = await findValidVersion(chatId, { includeDefaultFiles: true })
+async function getFileList(chatId, options = {}) {
+  let version, fallback
+  if (options.versionId) {
+    version = await getVersionDetails(chatId, options.versionId, { includeDefaultFiles: true })
+    fallback = false
+  } else {
+    ({ version, fallback } = await findValidVersion(chatId, { includeDefaultFiles: true }))
+  }
   const files = version.files || []
+  const validFiles = files.filter(f => isValidContent(f.content))
 
   return {
     versionId: version.id,
     fallback,
-    files: files.map(f => ({
+    filtered: files.length - validFiles.length,
+    files: validFiles.map(f => ({
       name: f.name,
       lang: detectLang(f.name)
     }))
@@ -60,8 +68,17 @@ async function getFileList(chatId) {
  * @returns {Promise<{ versionId: string, fallback: boolean, files: Array<{ name, lang, source }> }>}
  */
 async function getFileContent(chatId, options = {}) {
-  const { version, fallback } = await findValidVersion(chatId, { includeDefaultFiles: true })
+  let version, fallback
+  if (options.versionId) {
+    version = await getVersionDetails(chatId, options.versionId, { includeDefaultFiles: true })
+    fallback = false
+  } else {
+    ({ version, fallback } = await findValidVersion(chatId, { includeDefaultFiles: true }))
+  }
   let files = version.files || []
+  files = files.filter(f => isValidContent(f.content))
+  const totalBeforeNameFilter = files.length
+  const filteredCount = (version.files || []).length - totalBeforeNameFilter
 
   if (options.files && options.files.length > 0) {
     files = files.filter(f => options.files.includes(f.name))
@@ -70,6 +87,7 @@ async function getFileContent(chatId, options = {}) {
   return {
     versionId: version.id,
     fallback,
+    filtered: filteredCount,
     files: files.map(f => ({
       name: f.name,
       lang: detectLang(f.name),
@@ -296,22 +314,33 @@ function isValidContent(content) {
 
 function hasValidFiles(files) {
   if (!files || files.length === 0) return false
-  return files.every(f => isValidContent(f.content))
+  return files.some(f => isValidContent(f.content))
 }
 
 async function findValidVersion(chatId, { includeDefaultFiles = false } = {}) {
   const result = await getVersionList(chatId)
   const versions = result.data || []
-
+  if (versions.length === 0) {
+    throw new Error(`Chat ${chatId} has no versions`)
+  }
+  const skipped = []
   for (const v of versions) {
-    if (v.status !== 'completed') continue
+    if (v.status !== 'completed') {
+      skipped.push({ id: v.id, reason: `status=${v.status}` })
+      continue
+    }
     const details = await getVersionDetails(chatId, v.id, { includeDefaultFiles })
     if (hasValidFiles(details.files)) {
       return { version: details, fallback: v.id !== versions[0]?.id }
     }
+    skipped.push({ id: v.id, reason: 'no valid files' })
   }
-
-  throw new Error('No version with valid file content found')
+  const summary = skipped.map(s => `  ${s.id}: ${s.reason}`).join('\n')
+  throw new Error(
+    `No version with valid files for chat ${chatId}.\n` +
+    `Checked ${versions.length} version(s):\n${summary}\n` +
+    `Tip: Use "get_version_list ${chatId}" to inspect versions.`
+  )
 }
 
 /**
@@ -345,16 +374,30 @@ async function main() {
         break
       }
       case 'get_file_list': {
-        const [chatId] = args
+        const allArgs = [...args]
+        const versionIdx = allArgs.indexOf('--version')
+        let versionId
+        if (versionIdx !== -1) {
+          versionId = allArgs[versionIdx + 1]
+          allArgs.splice(versionIdx, 2)
+        }
+        const [chatId] = allArgs
         if (!chatId) throw new Error('chatId is required')
-        const result = await getFileList(chatId)
+        const result = await getFileList(chatId, { versionId })
         console.log(JSON.stringify(result, null, 2))
         break
       }
       case 'get_file_content': {
-        const [chatId, ...files] = args
+        const allArgs = [...args]
+        const versionIdx = allArgs.indexOf('--version')
+        let versionId
+        if (versionIdx !== -1) {
+          versionId = allArgs[versionIdx + 1]
+          allArgs.splice(versionIdx, 2)
+        }
+        const [chatId, ...files] = allArgs
         if (!chatId) throw new Error('chatId is required')
-        const result = await getFileContent(chatId, { files })
+        const result = await getFileContent(chatId, { files, versionId })
         console.log(JSON.stringify(result, null, 2))
         break
       }
@@ -396,20 +439,41 @@ async function main() {
         console.log(JSON.stringify(formatVersionResult(chatId, version), null, 2))
         break
       }
+      case 'get_version_list': {
+        const [chatId] = args
+        if (!chatId) throw new Error('chatId is required')
+        const result = await getVersionList(chatId)
+        const versions = (result.data || []).map(v => ({
+          id: v.id,
+          status: v.status,
+          createdAt: v.createdAt
+        }))
+        console.log(JSON.stringify({ chatId, versions }, null, 2))
+        break
+      }
+      case 'get_chat_details': {
+        const [chatId] = args
+        if (!chatId) throw new Error('chatId is required')
+        const result = await getChatDetails(chatId)
+        console.log(JSON.stringify(result, null, 2))
+        break
+      }
       default:
         console.log('v0 API CLI — all commands output JSON')
         console.log('')
         console.log('Usage: node scripts/v0.js <command> [args]')
         console.log('')
         console.log('Read:')
-        console.log('  get_chat_list [limit] [offset]         List chats')
-        console.log('  get_file_list <chatId>                 List files in chat')
-        console.log('  get_file_content <chatId> [files...]   Get file contents')
-        console.log('  search_chats <query> [-f]              Search chats by name/files')
+        console.log('  get_chat_list [limit] [offset]                    List chats')
+        console.log('  get_chat_details <chatId>                         Chat details')
+        console.log('  get_version_list <chatId>                         List versions')
+        console.log('  get_file_list <chatId> [--version <id>]           List files in chat')
+        console.log('  get_file_content <chatId> [files...] [--version <id>]  Get file contents')
+        console.log('  search_chats <query> [-f]                         Search chats by name/files')
         console.log('')
         console.log('Write:')
-        console.log('  create_chat <prompt> [--privacy p]     Generate from prompt')
-        console.log('  send_message <chatId> <message>        Send follow-up message')
+        console.log('  create_chat <prompt> [--privacy p]                Generate from prompt')
+        console.log('  send_message <chatId> <message>                   Send follow-up message')
     }
   } catch (err) {
     console.error('Error:', err.message)

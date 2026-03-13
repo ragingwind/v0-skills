@@ -12,8 +12,10 @@ v0 Platform API generates production-ready React components with proper architec
 | Command | Purpose | Usage |
 |---------|---------|-------|
 | `get_chat_list` | List existing chats | `node scripts/v0.js get_chat_list [limit] [offset]` |
-| `get_file_list` | List files in chat | `node scripts/v0.js get_file_list <chatId>` |
-| `get_file_content` | Get source code | `node scripts/v0.js get_file_content <chatId> [file1] [file2]...` |
+| `get_chat_details` | Chat details | `node scripts/v0.js get_chat_details <chatId>` |
+| `get_version_list` | List versions | `node scripts/v0.js get_version_list <chatId>` |
+| `get_file_list` | List files in chat | `node scripts/v0.js get_file_list <chatId> [--version <id>]` |
+| `get_file_content` | Get source code | `node scripts/v0.js get_file_content <chatId> [file1...] [--version <id>]` |
 | `search_chats` | Search chats by name/files | `node scripts/v0.js search_chats <query> [-f]` |
 | `create_chat` | Generate from prompt | `node scripts/v0.js create_chat <prompt> [--privacy public\|private]` |
 | `send_message` | Follow-up message | `node scripts/v0.js send_message <chatId> <message>` |
@@ -37,21 +39,37 @@ node scripts/v0.js get_chat_list [limit] [offset]
 
 **Output:** `{ "data": [{ "id", "name", "createdAt" }] }`
 
+### get_chat_details
+```bash
+node scripts/v0.js get_chat_details <chatId>
+```
+Returns full details for a specific chat.
+
+**Output:** Chat object with id, name, createdAt, etc.
+
+### get_version_list
+```bash
+node scripts/v0.js get_version_list <chatId>
+```
+Lists all versions (iterations) of a chat, newest first.
+
+**Output:** `{ "chatId", "versions": [{ "id", "status", "createdAt" }] }`
+
 ### get_file_list
 ```bash
-node scripts/v0.js get_file_list <chatId>
+node scripts/v0.js get_file_list <chatId> [--version <id>]
 ```
-Lists source files in a chat's latest valid version.
+Lists source files in a chat's latest valid version. Use `--version` to target a specific version.
 
-**Output:** `{ "versionId", "files": [{ "name", "lang" }] }`
+**Output:** `{ "versionId", "fallback", "filtered", "files": [{ "name", "lang" }] }`
 
 ### get_file_content
 ```bash
-node scripts/v0.js get_file_content <chatId> [file1] [file2] ...
+node scripts/v0.js get_file_content <chatId> [file1] [file2] ... [--version <id>]
 ```
-Retrieves source code. Omit file names to get all files.
+Retrieves source code. Omit file names to get all files. Use `--version` to target a specific version.
 
-**Output:** `{ "versionId", "files": [{ "name", "lang", "source" }] }`
+**Output:** `{ "versionId", "fallback", "filtered", "files": [{ "name", "lang", "source" }] }`
 
 ### search_chats
 ```bash
@@ -77,6 +95,13 @@ Sends a follow-up message and waits for the new version. Returns updated files w
 
 **Output:** `{ "chatId", "versionId", "demoUrl", "files": [{ "name", "lang", "source" }] }`
 
+## Known Limitations
+
+- **Synthetic files** (v0 internal layout files) are not accessible via the API
+- **GENERATING files** are automatically filtered out — files still being generated are excluded from results
+- The `filtered` field in responses indicates how many files were excluded (GENERATING or empty content)
+- When all files in a version are GENERATING, the version is skipped and an older version is used (indicated by `fallback: true`)
+
 ## Workflows
 
 ### Fetch code from v0
@@ -91,6 +116,17 @@ node scripts/v0.js search_chats "dashboard"
 node scripts/v0.js get_file_content <chatId>
 # or specific files only
 node scripts/v0.js get_file_content <chatId> Button.tsx DataTable.tsx
+```
+
+### Access a specific version
+
+```bash
+# 1. List all versions
+node scripts/v0.js get_version_list <chatId>
+
+# 2. Get files from a specific version
+node scripts/v0.js get_file_content <chatId> --version <versionId>
+node scripts/v0.js get_file_list <chatId> --version <versionId>
 ```
 
 ### Generate new UI and get code
