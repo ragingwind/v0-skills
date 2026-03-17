@@ -1,13 +1,92 @@
 #!/usr/bin/env node
 
+const os = require('os')
+const path = require('path')
+const fs = require('fs')
+
 const BASE_URL = 'https://api.v0.dev/v1'
 
+// ─── Config ───────────────────────────────────────────────────────────────────
+
+function getConfigDir() {
+  if (process.env.V0_CONFIG_DIR) return process.env.V0_CONFIG_DIR
+  if (process.platform === 'win32') {
+    return path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'v0')
+  }
+  return path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'v0')
+}
+
+function getConfigPath() {
+  return path.join(getConfigDir(), 'config.json')
+}
+
+function readConfig() {
+  try {
+    return JSON.parse(fs.readFileSync(getConfigPath(), 'utf8'))
+  } catch {
+    return { activeProfile: 'default', profiles: {} }
+  }
+}
+
+function writeConfig(config) {
+  const dir = getConfigDir()
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(getConfigPath(), JSON.stringify(config, null, 2) + '\n')
+}
+
+function maskKey(key) {
+  if (key.startsWith('env://')) return key
+  if (key.length <= 8) return '****'
+  return key.slice(0, 4) + '****' + key.slice(-4)
+}
+
+function resolveKey(key) {
+  if (key.startsWith('env://')) {
+    const envVar = key.slice(6)
+    return process.env[envVar]
+  }
+  return key
+}
+
+let _resolvedApiKey = null
+
 function getApiKey() {
+  if (_resolvedApiKey) return _resolvedApiKey
   const apiKey = process.env.V0_API_KEY
   if (!apiKey) {
-    throw new Error('V0_API_KEY environment variable is required')
+    throw new Error('V0_API_KEY environment variable is required. Or configure a profile: node scripts/v0.js config profile set <name> --key <value>')
   }
   return apiKey
+}
+
+/**
+ * Resolve API key with multi-tier priority:
+ * 1. options.apiKey (--api-key flag)
+ * 2. options.profile → config profile → resolveKey()
+ * 3. process.env.V0_API_KEY
+ * 4. config activeProfile → resolveKey()
+ */
+function resolveApiKey(options = {}) {
+  if (options.apiKey) return options.apiKey
+
+  const config = readConfig()
+
+  if (options.profile) {
+    const profile = config.profiles[options.profile]
+    if (!profile) throw new Error(`Profile "${options.profile}" not found`)
+    const key = resolveKey(profile.key)
+    if (!key) throw new Error(`Profile "${options.profile}" key could not be resolved`)
+    return key
+  }
+
+  if (process.env.V0_API_KEY) return process.env.V0_API_KEY
+
+  if (config.activeProfile && config.profiles[config.activeProfile]) {
+    const key = resolveKey(config.profiles[config.activeProfile].key)
+    if (key) return key
+  }
+
+  throw new Error('No API key found. Set V0_API_KEY or configure a profile: node scripts/v0.js config profile set <name> --key <value>')
 }
 
 // ─── API Functions ────────────────────────────────────────────────────────────
@@ -362,10 +441,33 @@ function formatVersionResult(chatId, version) {
 
 // ─── CLI ──────────────────────────────────────────────────────────────────────
 
-const [,, command, ...args] = process.argv
+const rawArgs = process.argv.slice(2)
+
+function extractGlobalFlags(args) {
+  const result = { args: [...args] }
+  const apiKeyIdx = result.args.indexOf('--api-key')
+  if (apiKeyIdx !== -1) {
+    result.apiKey = result.args[apiKeyIdx + 1]
+    result.args.splice(apiKeyIdx, 2)
+  }
+  const profileIdx = result.args.indexOf('--profile')
+  if (profileIdx !== -1) {
+    result.profile = result.args[profileIdx + 1]
+    result.args.splice(profileIdx, 2)
+  }
+  return result
+}
+
+const globalOpts = extractGlobalFlags(rawArgs)
+const [command, ...args] = globalOpts.args
 
 async function main() {
   try {
+    // Config commands don't need API key
+    if (command !== 'config') {
+      _resolvedApiKey = resolveApiKey({ apiKey: globalOpts.apiKey, profile: globalOpts.profile })
+    }
+
     switch (command) {
       case 'get_chat_list': {
         const [limit, offset] = args
@@ -458,6 +560,71 @@ async function main() {
         console.log(JSON.stringify(result, null, 2))
         break
       }
+      case 'config': {
+        const [sub, ...subArgs] = args
+        if (sub === 'profile') {
+          const [action, ...rest] = subArgs
+
+          if (action === 'list') {
+            const config = readConfig()
+            const profiles = Object.entries(config.profiles).map(([name, p]) => {
+              const entry = {
+                name,
+                active: name === config.activeProfile,
+                key: maskKey(p.key)
+              }
+              if (p.key.startsWith('env://')) {
+                entry.resolved = resolveKey(p.key) != null
+              }
+              return entry
+            })
+            console.log(JSON.stringify({ activeProfile: config.activeProfile, profiles }, null, 2))
+
+          } else if (action === 'set') {
+            const name = rest[0]
+            if (!name) throw new Error('Profile name is required')
+            const keyIdx = rest.indexOf('--key')
+            if (keyIdx === -1 || !rest[keyIdx + 1]) throw new Error('--key <value> is required')
+            const key = rest[keyIdx + 1]
+            const config = readConfig()
+            config.profiles[name] = { key }
+            if (Object.keys(config.profiles).length === 1) {
+              config.activeProfile = name
+            }
+            writeConfig(config)
+            console.log(JSON.stringify({ ok: true, profile: name, active: config.activeProfile === name }, null, 2))
+
+          } else if (action === 'delete') {
+            const name = rest[0]
+            if (!name) throw new Error('Profile name is required')
+            const config = readConfig()
+            if (!config.profiles[name]) throw new Error(`Profile "${name}" not found`)
+            if (config.activeProfile === name) throw new Error(`Cannot delete active profile "${name}". Switch to another profile first.`)
+            delete config.profiles[name]
+            writeConfig(config)
+            console.log(JSON.stringify({ ok: true, deleted: name }, null, 2))
+
+          } else if (action) {
+            // config profile <name> — switch active profile
+            const config = readConfig()
+            if (!config.profiles[action]) throw new Error(`Profile "${action}" not found`)
+            config.activeProfile = action
+            writeConfig(config)
+            console.log(JSON.stringify({ ok: true, activeProfile: action }, null, 2))
+
+          } else {
+            throw new Error('Usage: config profile <list|set|delete|name>')
+          }
+
+        } else if (sub === 'show') {
+          const config = readConfig()
+          console.log(JSON.stringify({ path: getConfigPath(), config }, null, 2))
+
+        } else {
+          throw new Error('Usage: config <profile|show>')
+        }
+        break
+      }
       default:
         console.log('v0 API CLI — all commands output JSON')
         console.log('')
@@ -474,6 +641,17 @@ async function main() {
         console.log('Write:')
         console.log('  create_chat <prompt> [--privacy p]                Generate from prompt')
         console.log('  send_message <chatId> <message>                   Send follow-up message')
+        console.log('')
+        console.log('Config:')
+        console.log('  config profile set <name> --key <value>           Create/update profile')
+        console.log('  config profile <name>                             Switch active profile')
+        console.log('  config profile list                               List profiles')
+        console.log('  config profile delete <name>                      Delete profile')
+        console.log('  config show                                       Show config path and settings')
+        console.log('')
+        console.log('Global flags:')
+        console.log('  --api-key <key>                                   Override API key for this call')
+        console.log('  --profile <name>                                  Use specific profile for this call')
     }
   } catch (err) {
     console.error('Error:', err.message)
@@ -490,5 +668,7 @@ module.exports = {
   createChat, sendMessage,
   getVersionList, getVersionDetails, findValidVersion,
   pollUntilComplete, waitForNewVersion,
-  isValidContent
+  isValidContent,
+  getConfigDir, getConfigPath, readConfig, writeConfig,
+  resolveApiKey, resolveKey, maskKey
 }

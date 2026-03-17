@@ -19,14 +19,32 @@ v0 Platform API generates production-ready React components with proper architec
 | `search_chats` | Search chats by name/files | `node scripts/v0.js search_chats <query> [-f]` |
 | `create_chat` | Generate from prompt | `node scripts/v0.js create_chat <prompt> [--privacy public\|private]` |
 | `send_message` | Follow-up message | `node scripts/v0.js send_message <chatId> <message>` |
+| `config profile set` | Create/update profile | `node scripts/v0.js config profile set <name> --key <value>` |
+| `config profile <name>` | Switch active profile | `node scripts/v0.js config profile <name>` |
+| `config profile list` | List profiles | `node scripts/v0.js config profile list` |
+| `config profile delete` | Delete profile | `node scripts/v0.js config profile delete <name>` |
+| `config show` | Show config | `node scripts/v0.js config show` |
 
 ## Setup
 
 1. Get API key from https://v0.dev/chat/settings/keys
-2. Set environment variable:
+2. Configure with a profile (recommended) or environment variable:
+
+   **Option A: Profile (supports multiple accounts)**
+   ```bash
+   # Direct key
+   node scripts/v0.js config profile set personal --key v0_key_abc123
+
+   # Environment variable reference (key stays in env, not in config file)
+   node scripts/v0.js config profile set team --key 'env://V0_TEAM_API_KEY'
+   ```
+
+   **Option B: Environment variable (single account)**
    ```bash
    export V0_API_KEY=your-api-key
    ```
+
+   **Key resolution priority:** `--api-key` flag > `--profile` flag > `V0_API_KEY` env var > active profile in config
 
 ## Commands
 
@@ -118,6 +136,19 @@ node scripts/v0.js get_file_content <chatId>
 node scripts/v0.js get_file_content <chatId> Button.tsx DataTable.tsx
 ```
 
+### Switch profile
+
+```bash
+# Switch to a different account/team
+node scripts/v0.js config profile team
+
+# One-off override without switching
+node scripts/v0.js get_chat_list --profile personal
+
+# One-off override with direct key
+node scripts/v0.js get_chat_list --api-key v0_key_override
+```
+
 ### Access a specific version
 
 ```bash
@@ -137,6 +168,67 @@ node scripts/v0.js create_chat "Data table with sorting, filtering, pagination. 
 
 # 2. Iterate if needed — returns updated source code
 node scripts/v0.js send_message <chatId> "Add dark mode support and make columns resizable"
+```
+
+### Generate from project context
+
+When the user asks to generate a UI component based on an existing project or plan, analyze the source code to build an effective v0 prompt before calling `create_chat`.
+
+**Step 1: Analyze the source code**
+
+Read the relevant source files in the project to understand:
+- Tech stack and framework patterns (App Router vs Pages, styling approach)
+- Component structure, naming conventions, import paths
+- Shared layouts, design tokens, utility patterns
+- UI library usage (which shadcn/Radix/MUI components are used and how)
+
+Focus on files directly related to where the new component will live — sibling components, parent layouts, shared utilities.
+
+**Step 2: Compose the v0 prompt**
+
+Combine the user's requirement with patterns observed from the source code:
+
+```
+<requirement from user or plan>
+
+Tech stack: <framework, styling, UI library, language — as observed in source>
+Conventions: <naming, structure, import patterns from existing code>
+
+Requirements:
+- <component behavior and interactions>
+- <state requirements: loading, error, empty>
+- <responsive breakpoints if relevant>
+- <accessibility needs>
+```
+
+**Step 3: Generate and iterate**
+
+```bash
+node scripts/v0.js create_chat "<composed prompt>"
+# Refine if needed
+node scripts/v0.js send_message <chatId> "<refinement>"
+```
+
+**Step 4: Integrate into project**
+
+- Adapt import paths to match the project's alias structure
+- Adjust naming to match project conventions
+- Wire up data fetching, state management, and routing
+- Install any missing dependencies
+
+**Example**
+
+```
+User: "Add a settings page with profile editing and notification preferences"
+
+1. Read existing pages/layout → App Router, sidebar layout, shadcn Tabs/Card/Input used
+2. Compose prompt:
+   "Settings page with two tabs: Profile (avatar, name, email, bio with validation)
+    and Notifications (toggle switches for email/push/SMS).
+    Next.js 14 App Router, TypeScript, Tailwind CSS, shadcn/ui (Tabs, Card, Input, Switch, Button).
+    Responsive: stack tabs vertically on mobile. Include loading and save states."
+3. node scripts/v0.js create_chat "<prompt>"
+4. Adapt imports, integrate with existing layout
 ```
 
 ## Prompt Patterns
