@@ -68,6 +68,32 @@ export V0_API_KEY=your-api-key
 
 Add to your shell profile (`~/.zshrc`, `~/.bashrc`) for persistence.
 
+**Manage profiles:**
+
+```bash
+# List all profiles
+node skills/v0/scripts/v0.js config profile list
+
+# Switch active profile
+node skills/v0/scripts/v0.js config profile team
+
+# Delete a profile
+node skills/v0/scripts/v0.js config profile delete old-account
+
+# Show current config
+node skills/v0/scripts/v0.js config show
+```
+
+**Override per command:**
+
+```bash
+# Use a specific profile for one call
+node skills/v0/scripts/v0.js get_chat_list --profile personal
+
+# Use a direct key for one call
+node skills/v0/scripts/v0.js get_chat_list --api-key v0_key_override
+```
+
 **Key resolution priority:** `--api-key` flag > `--profile` flag > `V0_API_KEY` env var > active profile in config
 
 ### 3. Install the skill
@@ -122,6 +148,30 @@ Here's what the agent does:
 5. **Iterates if needed** — `send_message <chatId> "Add annual/monthly toggle with 20% discount badge"` → pulls updated code
 
 You wrote one sentence. The agent wrote the prompt that would have taken you minutes to compose, because it already knows your codebase.
+
+## CLI Reference
+
+The agent uses these commands internally via `node skills/v0/scripts/v0.js`. You can also run them directly for debugging or scripting.
+
+| Command | Description |
+|---------|-------------|
+| `get_chat_list [limit] [offset]` | List v0 chats (default: 10 most recent) |
+| `get_chat_details <chatId>` | Get full details for a chat |
+| `get_version_list <chatId>` | List all versions of a chat |
+| `get_file_list <chatId> [--version <id>]` | List files in a chat |
+| `get_file_content <chatId> [files...] [--version <id>]` | Get source code from a chat |
+| `search_chats <query> [-f]` | Search chats by name (`-f` to include file names) |
+| `create_chat <prompt> [--privacy public\|private]` | Generate new UI from a prompt |
+| `send_message <chatId> <message>` | Send follow-up message to iterate |
+| `config profile set <name> --key <value>` | Create or update a profile |
+| `config profile <name>` | Switch active profile |
+| `config profile list` | List all profiles |
+| `config profile delete <name>` | Delete a profile |
+| `config show` | Show config file path and settings |
+
+**Global flags:** `--api-key <key>` and `--profile <name>` work with any command.
+
+All commands output JSON. For detailed output formats and workflow guides, see [SKILL.md](./skills/v0/SKILL.md).
 
 ## How it works (for contributors)
 
